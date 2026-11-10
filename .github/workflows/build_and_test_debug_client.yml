@@ -1,0 +1,335 @@
+# Copyright 2024 The Outline Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Build and Test / Client
+
+concurrency:
+  group: '${{ github.head_ref || github.ref }} Client'
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: "0 13 * * *"  # Run daily at 1PM UTC.
+
+jobs:
+  web_test:
+    name: Web Test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install NPM Dependencies
+        run: npm set cache .npm && npm ci
+
+      - name: Build Web App
+        run: npm run action client/web/build
+
+      - name: Test Web App
+        run: npm run action client/web/test
+
+      # - uses: codecov/codecov-action@v3
+      #   with:
+      #     files: ./client/src/output/coverage/www/coverage-final.json
+      #     flags: unittests, www
+
+  backend_test:
+    name: Go Backend Test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: '${{ github.workspace }}/go.mod'
+
+      - name: Test Go Backend
+        run: go test -race -bench=. -benchtime=100ms ./client/...
+
+  electron_debug_build:
+    name: ${{ matrix.name }} Debug Build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout }}
+    needs: [web_test, backend_test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            platform: linux
+            arch: x64
+            runner: ubuntu-22.04
+            timeout: 20
+          - name: Linux arm64
+            platform: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            timeout: 20
+            # puppeteer 13 has no arm64 chromium; install system chromium so
+            # its postinstall finds one.
+            installChromium: true
+            # fpm ("Effing Package Manager") is what electron-builder
+            # invokes to produce the Linux .deb. It bundles an x86 fpm
+            # binary only, so the arm64 runner has to install a native fpm
+            # via gem and tell electron-builder to use it. Workaround from:
+            # https://github.com/jordansissel/fpm/issues/1801#issuecomment-919877499
+            useSystemFpm: true
+            # We use windows-2022 instead of windows-2025 because windows-2025
+            # includes Visual Studio 2026, which causes a buffer overflow crash
+            # in the node-gyp version (v10.1.0) bundled with Node 22.
+          - name: Windows ia32
+            platform: windows
+            arch: ia32
+            runner: windows-2022
+            timeout: 40
+          - name: Windows arm64
+            platform: windows
+            arch: arm64
+            runner: windows-2022
+            timeout: 40
+    steps:
+      - name: Support longpaths
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install Chromium
+        if: matrix.installChromium
+        run: sudo apt update && sudo apt install chromium-browser
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: '${{ github.workspace }}/go.mod'
+
+      - name: Install zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.13.0
+          use-cache: false
+
+      - name: Install system fpm
+        # Export USE_SYSTEM_FPM from this conditional step rather than via the
+        # build step's `env:` block. `env:` would always *define* the variable
+        # (with an empty value for non-fpm matrices), and app-builder treats
+        # any defined USE_SYSTEM_FPM as a request to use system fpm.
+        if: matrix.useSystemFpm
+        run: |
+          sudo gem install fpm
+          echo "USE_SYSTEM_FPM=true" >> $GITHUB_ENV
+
+      - name: Build Client
+        run: npm run action client/electron/build ${{ matrix.platform }} -- --arch ${{ matrix.arch }}
+
+  macos_debug_build:
+    name: MacOS Debug Build
+    runs-on: macos-15
+    timeout-minutes: 20
+    needs: [web_test, backend_test]
+    steps:
+      - name: Display XCode
+        run: xcode-select --print-path
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: '${{ github.workspace }}/go.mod'
+
+      - name: Build Tun2Socks (required for Test OutlineAppleLib)
+        run: npm run action client/src/tun2socks/build macos
+
+      - name: Test OutlineAppleLib
+        run: npm run action client/src/cordova/test macos
+
+      - name: Build MacOS Client
+        run: npm run action client/src/cordova/build macos
+
+      # - uses: codecov/codecov-action@v4
+      #   with:
+      #     file: ./client/src/output/coverage/apple/macos/TestResult.xcresult
+      #     flags: unittests, apple, macos
+
+  ios_debug_build:
+    name: iOS Debug Build
+    runs-on: macos-15
+    timeout-minutes: 20
+    needs: [web_test, backend_test]
+    steps:
+      - name: Display XCode
+        run: xcode-select --print-path
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: '${{ github.workspace }}/go.mod'
+
+      - name: Build Tun2Socks (required for Test OutlineAppleLib)
+        run: npm run action client/src/tun2socks/build ios
+
+      - name: Test OutlineAppleLib
+        run: npm run action client/src/cordova/test ios
+
+      - name: Build iOS Client
+        run: npm run action client/src/cordova/build ios
+
+      # - uses: codecov/codecov-action@v4
+      #   with:
+      #     file: ./client/src/output/coverage/apple/ios/TestResult.xcresult
+      #     flags: unittests, apple, ios
+
+  capacitor_ios_debug_build:
+    name: iOS Capacitor Debug Build
+    runs-on: macos-15
+    timeout-minutes: 30
+    needs: [web_test, backend_test]
+    steps:
+      - name: Display XCode
+        run: xcode-select --print-path
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: '${{ github.workspace }}/go.mod'
+
+      # Builds the web bundle, runs `cap sync ios` (which builds the tun2socks
+      # xcframework via the capacitor:sync:before hook), and then runs an
+      # unsigned xcodebuild of ios/App/App.xcodeproj.
+      - name: Build iOS Capacitor Client
+        run: npm run action client/capacitor/build ios
+
+  android_debug_build:
+    name: Android Debug Build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    needs: [web_test, backend_test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Setup Java
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Build Android Client
+        run: npm run action client/src/cordova/build android -- --verbose
+
+  capacitor_android_debug_build:
+    name: Android Capacitor Debug Build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    needs: [web_test, backend_test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Setup Java
+        # Capacitor 8's Android project targets Java 21 (see
+        # client/capacitor/android/app/build.gradle), so build with JDK 21.
+        run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> $GITHUB_ENV
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: '${{ github.workspace }}/go.mod'
+
+      - name: Build Android Capacitor Client
+        run: npm run action client/capacitor/build android

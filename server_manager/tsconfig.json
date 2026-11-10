@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "removeComments": false,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "module": "commonjs",
+    "moduleResolution": "Node",
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "noUnusedLocals": true,
+    "skipLibCheck": true,
+    "target": "es2021",
+    "lib": ["dom", "es2022"]
+  },
+  "rootDir": ".",
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}

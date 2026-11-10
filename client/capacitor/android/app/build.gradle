@@ -1,0 +1,94 @@
+// Copyright 2026 The Outline Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+apply plugin: 'com.android.application'
+
+android {
+    namespace "org.outline.client"
+    compileSdk 36
+
+    // AGP strips the debug symbols from the native libraries it packages
+    // (tun2socks' libgojni.so, the Sentry native libs), but only when it can
+    // find this NDK's llvm-strip. Without the pin it ships the unstripped
+    // ~12MB-per-ABI libgojni.so. The unstripped copy survives in the tun2socks
+    // .aar, which is where upload_debug_symbols reads it for Sentry.
+    ndkVersion "28.2.13676358"
+
+    // 16KB page-size support: package native libraries uncompressed and
+    // page-aligned. This is the AGP default, set explicitly to guard against
+    // the packaging regressing to legacy behavior.
+    packaging {
+        jniLibs {
+            useLegacyPackaging false
+        }
+    }
+
+    defaultConfig {
+        // Ship under the same package id as the existing Cordova client so the
+        // Play Store delivers this as an in-place update. That is a hard
+        // requirement for the Cordova->Capacitor localStorage migration: the new
+        // app can only read the legacy file:// storage if it inherits the old
+        // app's data directory, which only happens on a same-id upgrade.
+        // (namespace stays org.outline.client — that is the code package, not the
+        // install identity.)
+        applicationId "org.outline.android.client"
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk 36
+        // Release builds get their version from client/capacitor/build.action.mjs,
+        // which passes it in as Gradle project properties.
+        versionCode((findProperty('outlineVersionCode') ?: 1) as Integer)
+        versionName(findProperty('outlineVersionName') ?: "1.0")
+    }
+
+    signingConfigs {
+        release {
+            // Only client/capacitor/build.action.mjs sets this, for release
+            // builds. The password is read from the environment so that it
+            // never shows up in the Gradle command line or the build logs.
+            if (project.hasProperty('outlineKeystorePath')) {
+                storeFile file(project.property('outlineKeystorePath'))
+                storeType 'pkcs12'
+                storePassword System.getenv('ANDROID_KEY_STORE_PASSWORD')
+                keyAlias 'privatekey'
+                keyPassword System.getenv('ANDROID_KEY_STORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (project.hasProperty('outlineKeystorePath')) {
+                signingConfig signingConfigs.release
+            }
+            // The keep rules for our reflectively-instantiated, JNI and AIDL
+            // classes come from the consumer rules of OutlineAndroidLib and of
+            // capacitor-android.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation "androidx.appcompat:appcompat:$rootProject.ext.androidxAppCompatVersion"
+}
+
+apply from: 'capacitor.build.gradle'

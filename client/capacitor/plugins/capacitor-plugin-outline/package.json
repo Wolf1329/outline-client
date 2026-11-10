@@ -1,0 +1,42 @@
+{
+    "name": "capacitor-plugin-outline",
+    "version": "1.0.0",
+    "description": "Capacitor plugin for Outline VPN",
+    "main": "dist/plugin.cjs.js",
+    "module": "dist/esm/index.js",
+    "types": "dist/esm/index.d.ts",
+    "unpkg": "dist/plugin.js",
+    "files": [
+        "dist/",
+        "ios/",
+        "android/",
+        "src/",
+        "Package.swift"
+    ],
+    "author": "Outline Authors",
+    "license": "Apache-2.0",
+    "keywords": [
+        "capacitor",
+        "plugin",
+        "native"
+    ],
+    "scripts": {
+        "clean": "rm -rf node_modules dist",
+        "build": "tsc"
+    },
+    "devDependencies": {
+        "@capacitor/core": "^8.3.1",
+        "typescript": "^5.0.0"
+    },
+    "peerDependencies": {
+        "@capacitor/core": "^8.3.1"
+    },
+    "capacitor": {
+        "ios": {
+            "src": "ios"
+        },
+        "android": {
+            "src": "android"
+        }
+    }
+}

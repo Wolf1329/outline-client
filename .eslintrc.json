@@ -1,0 +1,167 @@
+{
+  "extends": "./node_modules/gts/",
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module",
+    "project": [
+      "./client/tsconfig.json",
+      "./client/capacitor/tsconfig.json",
+      "./infrastructure/tsconfig.json",
+      "./server_manager/tsconfig.json"
+    ]
+  },
+  "plugins": [
+    "compat",
+    "import"
+  ],
+  "rules": {
+    "compat/compat": "error",
+    "import/no-restricted-paths": [
+      "error",
+      {
+        "zones": [
+          // This means that in the /infrastructure folder,
+          // you can't import any code,
+          // with the exception of other files within the /infrastructure folder.
+          {
+            "target": "./infrastructure",
+            "from": ".",
+            "except": [
+              "./infrastructure",
+              "./node_modules",
+              "./third_party"
+            ]
+          },
+          // Similar to above but for web/model, but you can use files from both the
+          // web/model and web/infrastructure paths.
+          {
+            "target": "./client/web/model",
+            "from": ".",
+            "except": [
+              "./client/web/model",
+              "./infrastructure",
+              "./node_modules"
+            ]
+          },
+          // Prevents the internals of the outline_server_repository from being used publicly in the app.
+          {
+            "target": "./client/web/app/*.ts",
+            "from": "./client/web/app/outline_server_repository/server.ts"
+          },
+          {
+            "target": "./client/web/app/*.ts",
+            "from": "./client/web/app/outline_server_repository/access_key_serialization.ts"
+          },
+          {
+            "target": "./client/web/views",
+            "from": "./client/web/model"
+          },
+          {
+            "target": "./client/web/ui_components",
+            "from": "./client/web/model"
+          },
+          {
+            "target": "./client/web/views",
+            "from": "./client/web/app"
+          },
+          {
+            "target": "./client/web/ui_components",
+            "from": "./client/web/app"
+          }
+        ]
+      }
+    ],
+    "import/order": [
+      "error",
+      {
+        "groups": [
+          "builtin",
+          "external",
+          "internal"
+        ],
+        "pathGroups": [
+          {
+            "pattern": "@material/**",
+            "group": "external",
+            "position": "before"
+          }
+        ],
+        "pathGroupsExcludedImportTypes": [
+          "@material/**"
+        ],
+        "newlines-between": "always",
+        "alphabetize": {
+          "order": "asc",
+          "caseInsensitive": true
+        }
+      }
+    ],
+    "n/no-unsupported-features/node-builtins": [
+      "error",
+      {
+        "version": ">=18.0.0"
+      }
+    ],
+    "n/no-unsupported-features/es-builtins": [
+      "error",
+      {
+        "version": ">=18.0.0"
+      }
+    ],
+    "n/no-unsupported-features/es-syntax": [
+      "error",
+      {
+        "version": ">=18.0.0"
+      }
+    ],
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "varsIgnorePattern": "^_",
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "@typescript-eslint/no-floating-promises": [
+      "error",
+      {
+        "ignoreVoid": true
+      }
+    ],
+    "no-unused-vars": [
+      "error",
+      {
+        "varsIgnorePattern": "^_",
+        "argsIgnorePattern": "^_"
+      }
+    ]
+  },
+  // Disable type-aware linting only for JS config/build files that are not in
+  // any TS project.
+  "overrides": [
+    {
+      "files": [
+        "commitlint.config.js",
+        "server_manager/base.webpack.js",
+        "server_manager/browser.webpack.js",
+        "server_manager/css-in-js-rtl-loader.js",
+        "server_manager/electron_renderer.webpack.js",
+        "server_manager/electron/release/notarize.js",
+        "server_manager/electron/windows/electron_builder_signing_plugin.cjs",
+        "server_manager/install_scripts/build_do_install_script_ts.node.js",
+        "server_manager/install_scripts/build_gcp_install_script_ts.node.js",
+        "server_manager/www/karma.conf.js",
+        "server_manager/electron_main.webpack.mjs",
+        "server_manager/electron_preload.webpack.mjs",
+        ".prettierrc.js",
+        "client/web/karma.conf.js"
+      ],
+      "extends": [
+        "plugin:@typescript-eslint/disable-type-checked"
+      ],
+      "parserOptions": {
+        "project": null
+      }
+    }
+  ]
+}

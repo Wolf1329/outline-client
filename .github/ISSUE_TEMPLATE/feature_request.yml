@@ -1,0 +1,68 @@
+# Copyright 2024 The Outline Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Feature Request"
+description: Suggest an idea for this project
+type: "feature"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to suggest new ideas for this project.
+        Your contribution will help make the Outline applications better for
+        everyone.
+  - type: checkboxes
+    attributes:
+      label: "Is there an existing issue that is already proposing this?"
+      description: "Please search [here](../issues?q=is%3Aissue) to see if an issue already exists for the feature you are requesting"
+      options:
+      - label: "I have searched the existing issues"
+        required: true
+  - type: dropdown
+    id: app
+    attributes:
+      label: Application
+      description: Which Outline application is this in relation to?
+      options:
+        - Outline Client
+        - Outline Manager
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: "What are you trying to do? What is your use case?"
+      description: "Describe the motivation or the concrete use case."
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a problem? Please describe it.
+      description: "A clear and concise description of what the problem is."
+      placeholder: |
+        I have an issue when ...
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like.
+      description: "A clear and concise description of what you want to happen."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Describe alternatives you've considered
+      description: A clear and concise description of any alternative solutions or features you've considered.
